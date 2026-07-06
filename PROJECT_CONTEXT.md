@@ -4,6 +4,7 @@
 
 - Name: Codex Buddy
 - Repo: `https://github.com/BadBagger/codex-buddy`
+- Repo visibility: public, so DevHub can read GitHub release metadata without embedding a token in the Android app
 - Android package: `com.softsmith.codexbuddy`
 - Current version: `0.1.0`
 - Current role: Android overlay chat companion for OpenAI API messages

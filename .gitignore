@@ -1,4 +1,5 @@
 .gradle/
+.codex-remote-attachments/
 build/
 app/build/
 local.properties
