@@ -122,7 +122,7 @@ public class MainActivity extends Activity {
     private void refreshStatus() {
         boolean overlay = Settings.canDrawOverlays(this);
         String api = AppSettings.apiKey(this).isEmpty() ? "API key missing" : "API key saved";
-        status.setText((overlay ? "Overlay permission granted" : "Overlay permission needed") + " • " + api);
+        status.setText((overlay ? "Overlay permission granted" : "Overlay permission needed") + " - " + api);
     }
 
     private void maybeAskNotificationPermission() {

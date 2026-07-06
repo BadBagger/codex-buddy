@@ -121,7 +121,7 @@ public class OverlayChatService extends Service {
         title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         top.addView(title, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
 
-        Button close = smallButton("×");
+        Button close = smallButton("X");
         close.setOnClickListener(v -> removePanel());
         top.addView(close, new LinearLayout.LayoutParams(dp(42), dp(38)));
         panel.addView(top);
