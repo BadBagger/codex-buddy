@@ -13,15 +13,16 @@ import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import java.net.Inet4Address;
+import java.net.NetworkInterface;
+import java.util.Collections;
+
 public class MainActivity extends Activity {
     private TextView status;
-    private EditText apiKey;
-    private EditText model;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -48,7 +49,7 @@ public class MainActivity extends Activity {
         title.setGravity(Gravity.START);
         root.addView(title);
 
-        TextView subtitle = text("A floating Android chat relay for OpenAI. It can sit over other apps after overlay permission is granted. It does not run the desktop Codex agent or control apps by itself.", 16, Color.rgb(64, 72, 68));
+        TextView subtitle = text("A floating status buddy for your existing Codex work. Keep it running on this phone, then let a Codex hook on your PC post done or needs-attention updates here.", 16, Color.rgb(64, 72, 68));
         subtitle.setPadding(0, dp(10), 0, dp(20));
         root.addView(subtitle);
 
@@ -57,28 +58,9 @@ public class MainActivity extends Activity {
         status.setBackgroundColor(Color.rgb(224, 238, 232));
         root.addView(status, matchWrap());
 
-        apiKey = new EditText(this);
-        apiKey.setHint("OpenAI API key");
-        apiKey.setSingleLine(true);
-        apiKey.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        apiKey.setText(AppSettings.apiKey(this));
-        apiKey.setTextColor(Color.rgb(24, 30, 28));
-        root.addView(apiKey, matchWrapWithTop(18));
-
-        model = new EditText(this);
-        model.setHint("Model");
-        model.setSingleLine(true);
-        model.setInputType(InputType.TYPE_CLASS_TEXT);
-        model.setText(AppSettings.model(this));
-        model.setTextColor(Color.rgb(24, 30, 28));
-        root.addView(model, matchWrapWithTop(10));
-
-        Button save = button("Save settings");
-        save.setOnClickListener(v -> {
-            AppSettings.save(this, apiKey.getText().toString(), model.getText().toString());
-            refreshStatus();
-        });
-        root.addView(save, matchWrapWithTop(16));
+        TextView addresses = text(listenerText(), 14, Color.rgb(35, 42, 39));
+        addresses.setPadding(0, dp(18), 0, dp(8));
+        root.addView(addresses);
 
         Button grant = button("Grant overlay permission");
         grant.setOnClickListener(v -> startActivity(new Intent(
@@ -89,7 +71,6 @@ public class MainActivity extends Activity {
 
         Button start = button("Start floating buddy");
         start.setOnClickListener(v -> {
-            AppSettings.save(this, apiKey.getText().toString(), model.getText().toString());
             if (!Settings.canDrawOverlays(this)) {
                 refreshStatus();
                 return;
@@ -112,7 +93,7 @@ public class MainActivity extends Activity {
         });
         root.addView(stop, matchWrapWithTop(10));
 
-        TextView notes = text("Next layer, if you want it, is AccessibilityService support for reading selected screen text and performing explicit tap/type actions. This build stays on the safer chat-overlay layer.", 14, Color.rgb(82, 87, 84));
+        TextView notes = text("PC hook target: POST http://PHONE_IP:8787/notify with JSON title, message, and status. The phone and PC must be on the same local network.", 14, Color.rgb(82, 87, 84));
         notes.setPadding(0, dp(22), 0, 0);
         root.addView(notes);
 
@@ -121,8 +102,7 @@ public class MainActivity extends Activity {
 
     private void refreshStatus() {
         boolean overlay = Settings.canDrawOverlays(this);
-        String api = AppSettings.apiKey(this).isEmpty() ? "API key missing" : "API key saved";
-        status.setText((overlay ? "Overlay permission granted" : "Overlay permission needed") + " - " + api);
+        status.setText((overlay ? "Overlay permission granted" : "Overlay permission needed") + " - listener port " + StatusBridgeServer.PORT);
     }
 
     private void maybeAskNotificationPermission() {
@@ -159,5 +139,25 @@ public class MainActivity extends Activity {
 
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private String listenerText() {
+        StringBuilder builder = new StringBuilder("Listener URLs:\n");
+        boolean found = false;
+        try {
+            for (NetworkInterface networkInterface : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                for (java.net.InetAddress address : Collections.list(networkInterface.getInetAddresses())) {
+                    if (!address.isLoopbackAddress() && address instanceof Inet4Address) {
+                        builder.append("http://").append(address.getHostAddress()).append(":").append(StatusBridgeServer.PORT).append("/notify\n");
+                        found = true;
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        if (!found) {
+            builder.append("Connect to Wi-Fi, then reopen this screen.");
+        }
+        return builder.toString().trim();
     }
 }

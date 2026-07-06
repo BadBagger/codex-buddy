@@ -20,7 +20,6 @@ import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.content.Context;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -44,12 +43,16 @@ public class OverlayChatService extends Service {
     private ScrollView transcriptScroll;
     private WindowManager.LayoutParams bubbleParams;
     private WindowManager.LayoutParams panelParams;
+    private StatusBridgeServer statusServer;
+    private int alertId = 9100;
 
     @Override
     public void onCreate() {
         super.onCreate();
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         startForeground(NOTIFICATION_ID, buildNotification());
+        statusServer = new StatusBridgeServer((title, message, status) -> mainHandler.post(() -> onStatusEvent(title, message, status)));
+        statusServer.start();
         if (Settings.canDrawOverlays(this)) {
             showBubble();
         } else {
@@ -66,6 +69,9 @@ public class OverlayChatService extends Service {
     public void onDestroy() {
         removePanel();
         removeBubble();
+        if (statusServer != null) {
+            statusServer.stop();
+        }
         executor.shutdownNow();
         super.onDestroy();
     }
@@ -127,36 +133,13 @@ public class OverlayChatService extends Service {
         panel.addView(top);
 
         transcript = new TextView(this);
-        transcript.setText("Ask for help with the current app, text you paste, or a quick plan.\n");
+        transcript.setText("Waiting for Codex status events on port " + StatusBridgeServer.PORT + ".\n");
         transcript.setTextColor(Color.rgb(35, 42, 39));
         transcript.setTextSize(14);
         transcript.setLineSpacing(0, 1.08f);
         transcriptScroll = new ScrollView(this);
         transcriptScroll.addView(transcript);
         panel.addView(transcriptScroll, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
-
-        LinearLayout composer = new LinearLayout(this);
-        composer.setGravity(Gravity.CENTER_VERTICAL);
-        composer.setPadding(0, dp(10), 0, 0);
-        EditText input = new EditText(this);
-        input.setHint("Message...");
-        input.setSingleLine(false);
-        input.setMinLines(1);
-        input.setMaxLines(3);
-        composer.addView(input, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
-
-        Button send = smallButton("Send");
-        send.setOnClickListener(v -> {
-            String message = input.getText().toString().trim();
-            if (message.isEmpty()) {
-                return;
-            }
-            input.setText("");
-            append("You: " + message + "\n");
-            sendMessage(message);
-        });
-        composer.addView(send, new LinearLayout.LayoutParams(dp(82), dp(48)));
-        panel.addView(composer);
 
         panelParams = baseParams(dp(342), dp(470));
         panelParams.gravity = Gravity.TOP | Gravity.START;
@@ -165,13 +148,6 @@ public class OverlayChatService extends Service {
         panel.setOnTouchListener(new DragTouchListener(panelParams, false));
         windowManager.addView(panel, panelParams);
 
-        input.requestFocus();
-        mainHandler.postDelayed(() -> {
-            InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-            if (imm != null) {
-                imm.showSoftInput(input, InputMethodManager.SHOW_IMPLICIT);
-            }
-        }, 200);
     }
 
     private void sendMessage(String message) {
@@ -195,6 +171,24 @@ public class OverlayChatService extends Service {
         transcript.append(text);
         if (transcriptScroll != null) {
             transcriptScroll.post(() -> transcriptScroll.fullScroll(View.FOCUS_DOWN));
+        }
+    }
+
+    private void onStatusEvent(String title, String message, String status) {
+        append(title + "\n" + message + "\n\n");
+        Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+            ? new Notification.Builder(this, CHANNEL_ID)
+            : new Notification.Builder(this);
+        Notification notification = builder
+            .setSmallIcon(R.drawable.ic_stat_codex_buddy)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setStyle(new Notification.BigTextStyle().bigText(message))
+            .setAutoCancel(true)
+            .build();
+        NotificationManager notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (notificationManager != null) {
+            notificationManager.notify(alertId++, notification);
         }
     }
 
@@ -255,8 +249,8 @@ public class OverlayChatService extends Service {
             : new Notification.Builder(this);
         return builder
             .setSmallIcon(R.drawable.ic_stat_codex_buddy)
-            .setContentTitle("Codex Buddy is floating")
-            .setContentText("Tap the bubble to chat over other apps.")
+            .setContentTitle("Codex Buddy is listening")
+            .setContentText("Port " + StatusBridgeServer.PORT + " is ready for Codex status updates.")
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .build();

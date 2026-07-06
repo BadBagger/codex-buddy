@@ -6,26 +6,26 @@
 - Repo: `https://github.com/BadBagger/codex-buddy`
 - Repo visibility: public, so DevHub can read GitHub release metadata without embedding a token in the Android app
 - Android package: `com.softsmith.codexbuddy`
-- Current version: `0.1.1-overlay-start-fix`
-- Current role: Android overlay chat companion for OpenAI API messages
+- Current version: `0.2.0-status-bridge`
+- Current role: Android local status bridge for existing Codex work notifications
 
 ## Current Release
 
-- Tag: `v0.1.1-overlay-start-fix`
+- Tag: `v0.2.0-status-bridge`
 - APK assets:
   - `CodexBuddy.apk`
-  - `CodexBuddy-release-v0.1.1-overlay-start-fix.apk`
+  - `CodexBuddy-release-v0.2.0-status-bridge.apk`
 
 ## Product Boundary
 
-This app is not the desktop Codex app or runtime. It is a native Android overlay that can float above other apps and relay chat through the OpenAI API. The current build does not read other app screens or control other apps.
+This app is not the desktop Codex app or runtime. It is a native Android overlay and local HTTP listener for status notifications from the user's existing Codex work.
 
 ## Next Work
 
-- Add explicit AccessibilityService support only if app-reading or app-control behavior is needed.
-- Add stronger key handling if the app moves beyond private/internal testing.
+- Add a packaged PC-side hook installer after the status bridge is verified on-device.
 - Replace debug signing with a private release keystore for production-style distribution.
 
 ## Recent Notes
 
 - `v0.1.1-overlay-start-fix` adds the required Android foreground-service data sync permission so the overlay service can start cleanly on Android 14+.
+- `v0.2.0-status-bridge` changes Codex Buddy from a separate OpenAI chat client into a local status listener for existing Codex work. It exposes `POST /notify` on port 8787 and includes a sample Codex `Stop` hook script.

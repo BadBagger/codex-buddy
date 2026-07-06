@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "commandWindows": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\KyleB\\Documents\\Codex\\2026-07-06\\can-you-make-a-codex-android\\tools\\codex-buddy-notify.ps1\"",
+            "timeout": 10,
+            "statusMessage": "Notifying Codex Buddy"
+          }
+        ]
+      }
+    ]
+  }
+}
