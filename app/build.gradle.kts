@@ -10,8 +10,8 @@ android {
         applicationId = "com.softsmith.codexbuddy"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.2.0-status-bridge"
+        versionCode = 4
+        versionName = "0.2.1-panel-history"
     }
 
     buildTypes {

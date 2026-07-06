@@ -5,6 +5,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.SharedPreferences;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
@@ -17,24 +18,20 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
-import android.view.inputmethod.InputMethodManager;
-import android.content.Context;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
 public class OverlayChatService extends Service {
     private static final String CHANNEL_ID = "codex_buddy_overlay";
     private static final int NOTIFICATION_ID = 9001;
+    private static final String PREFS = "codex_buddy_status";
+    private static final String KEY_HISTORY = "history";
+    private static final int MAX_HISTORY_CHARS = 3000;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
-    private final ExecutorService executor = Executors.newSingleThreadExecutor();
-    private final OpenAiChatClient chatClient = new OpenAiChatClient();
 
     private WindowManager windowManager;
     private FrameLayout bubble;
@@ -43,8 +40,11 @@ public class OverlayChatService extends Service {
     private ScrollView transcriptScroll;
     private WindowManager.LayoutParams bubbleParams;
     private WindowManager.LayoutParams panelParams;
+    private TextView eventToast;
+    private WindowManager.LayoutParams eventToastParams;
     private StatusBridgeServer statusServer;
     private int alertId = 9100;
+    private final Runnable hideEventToast = this::removeEventToast;
 
     @Override
     public void onCreate() {
@@ -68,11 +68,11 @@ public class OverlayChatService extends Service {
     @Override
     public void onDestroy() {
         removePanel();
+        removeEventToast();
         removeBubble();
         if (statusServer != null) {
             statusServer.stop();
         }
-        executor.shutdownNow();
         super.onDestroy();
     }
 
@@ -133,7 +133,7 @@ public class OverlayChatService extends Service {
         panel.addView(top);
 
         transcript = new TextView(this);
-        transcript.setText("Waiting for Codex status events on port " + StatusBridgeServer.PORT + ".\n");
+        transcript.setText(currentTranscript());
         transcript.setTextColor(Color.rgb(35, 42, 39));
         transcript.setTextSize(14);
         transcript.setLineSpacing(0, 1.08f);
@@ -149,21 +149,6 @@ public class OverlayChatService extends Service {
         windowManager.addView(panel, panelParams);
 
     }
-
-    private void sendMessage(String message) {
-        append("Buddy: thinking...\n");
-        executor.execute(() -> {
-            String answer;
-            try {
-                answer = chatClient.send(AppSettings.apiKey(this), AppSettings.model(this), message);
-            } catch (Exception e) {
-                answer = "Request failed: " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
-            }
-            String finalAnswer = answer;
-            mainHandler.post(() -> append("Buddy: " + finalAnswer + "\n\n"));
-        });
-    }
-
     private void append(String text) {
         if (transcript == null) {
             return;
@@ -175,7 +160,10 @@ public class OverlayChatService extends Service {
     }
 
     private void onStatusEvent(String title, String message, String status) {
-        append(title + "\n" + message + "\n\n");
+        String entry = title + "\n" + message + "\n\n";
+        saveHistory(entry);
+        append(entry);
+        showEventToast(title, message);
         Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
             ? new Notification.Builder(this, CHANNEL_ID)
             : new Notification.Builder(this);
@@ -190,6 +178,60 @@ public class OverlayChatService extends Service {
         if (notificationManager != null) {
             notificationManager.notify(alertId++, notification);
         }
+    }
+
+    private void showEventToast(String title, String message) {
+        removeEventToast();
+        eventToast = new TextView(this);
+        eventToast.setText(title + "\n" + message);
+        eventToast.setTextColor(Color.rgb(245, 247, 250));
+        eventToast.setTextSize(14);
+        eventToast.setLineSpacing(0, 1.05f);
+        eventToast.setPadding(dp(12), dp(10), dp(12), dp(10));
+        eventToast.setMaxLines(4);
+        eventToast.setBackground(makeRound(Color.rgb(19, 37, 31), dp(12)));
+
+        eventToastParams = baseParams(dp(280), WindowManager.LayoutParams.WRAP_CONTENT);
+        eventToastParams.gravity = Gravity.TOP | Gravity.START;
+        eventToastParams.x = bubbleParams == null ? dp(18) : bubbleParams.x + dp(58);
+        eventToastParams.y = bubbleParams == null ? dp(130) : bubbleParams.y;
+        eventToastParams.flags = eventToastParams.flags | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+        windowManager.addView(eventToast, eventToastParams);
+        mainHandler.postDelayed(hideEventToast, 6500);
+    }
+
+    private void removeEventToast() {
+        mainHandler.removeCallbacks(hideEventToast);
+        if (eventToast != null) {
+            try {
+                windowManager.removeView(eventToast);
+            } catch (Exception ignored) {
+            }
+            eventToast = null;
+            eventToastParams = null;
+        }
+    }
+
+    private String currentTranscript() {
+        String history = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_HISTORY, "");
+        if (history == null || history.trim().isEmpty()) {
+            return "Waiting for Codex status events on port " + StatusBridgeServer.PORT + ".\n";
+        }
+        return history;
+    }
+
+    private void saveHistory(String entry) {
+        SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        String history = prefs.getString(KEY_HISTORY, "");
+        String updated = (history == null ? "" : history) + entry;
+        if (updated.length() > MAX_HISTORY_CHARS) {
+            updated = updated.substring(updated.length() - MAX_HISTORY_CHARS);
+            int firstBreak = updated.indexOf("\n\n");
+            if (firstBreak >= 0 && firstBreak + 2 < updated.length()) {
+                updated = updated.substring(firstBreak + 2);
+            }
+        }
+        prefs.edit().putString(KEY_HISTORY, updated).apply();
     }
 
     private void removeBubble() {
